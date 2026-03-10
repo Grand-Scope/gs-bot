@@ -20,21 +20,21 @@ const token = BOT_TOKEN.replace(/^Bot\s+/i, '');
 
 const commands = [
   {
-    name: 'track',
-    description: 'Track a GitHub repository and receive push notifications in this channel',
+    name: 'track-org',
+    description: 'Track a GitHub organization and receive notifications for all its repositories in this channel',
     type: 1, // CHAT_INPUT
     options: [
       {
-        name: 'repo',
-        description: 'Full repository name in owner/repo format (e.g. vercel/next.js)',
+        name: 'org',
+        description: 'GitHub organization login name (e.g. vercel)',
         type: 3, // STRING
         required: true,
       },
     ],
   },
   {
-    name: 'tracked',
-    description: 'List all GitHub repositories being tracked in this channel',
+    name: 'tracked-orgs',
+    description: 'List all GitHub organizations being tracked in this channel',
     type: 1,
   },
 ];

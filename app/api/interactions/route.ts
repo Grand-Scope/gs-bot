@@ -44,27 +44,27 @@ export async function POST(req: NextRequest) {
     const commandName: string = interaction.data.name;
     const channelId: string = interaction.channel_id;
 
-    // /track <repo>
-    if (commandName === 'track') {
-      const repoName: string | undefined =
+    // /track-org <org_name>
+    if (commandName === 'track-org') {
+      const orgName: string | undefined =
         interaction.data.options?.[0]?.value;
 
-      if (!repoName) {
+      if (!orgName) {
         return jsonResponse({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: '❌ Please provide a repository name (e.g. `owner/repo`).',
+            content: '❌ Please provide a GitHub organization name (e.g. `vercel`).',
             flags: EPHEMERAL,
           },
         });
       }
 
       const { error } = await supabase
-        .from('tracked_repos')
-        .upsert({ repo_name: repoName, channel_id: channelId });
+        .from('tracked_orgs')
+        .upsert({ org_name: orgName, channel_id: channelId });
 
       if (error) {
-        console.error('[/track] Supabase error:', error);
+        console.error('[/track-org] Supabase error:', error);
         return jsonResponse({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
@@ -77,25 +77,25 @@ export async function POST(req: NextRequest) {
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `✅ Now tracking **${repoName}** in this channel. You'll receive push notifications here.`,
+          content: `✅ Now tracking the **${orgName}** organization in this channel. You'll receive notifications for all its repositories here.`,
         },
       });
     }
 
-    // /tracked
-    if (commandName === 'tracked') {
+    // /tracked-orgs
+    if (commandName === 'tracked-orgs') {
       const { data, error } = await supabase
-        .from('tracked_repos')
-        .select('repo_name')
+        .from('tracked_orgs')
+        .select('org_name')
         .eq('channel_id', channelId)
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('[/tracked] Supabase error:', error);
+        console.error('[/tracked-orgs] Supabase error:', error);
         return jsonResponse({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: '❌ Could not fetch tracked repositories.',
+            content: '❌ Could not fetch tracked organizations.',
             flags: EPHEMERAL,
           },
         });
@@ -103,13 +103,13 @@ export async function POST(req: NextRequest) {
 
       const list =
         data && data.length > 0
-          ? data.map((r) => `• \`${r.repo_name}\``).join('\n')
-          : '*No repositories are being tracked in this channel yet.*';
+          ? data.map((r) => `• \`${r.org_name}\``).join('\n')
+          : '*No organizations are being tracked in this channel yet.*';
 
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `📚 **Tracked repositories in this channel:**\n${list}`,
+          content: `🏢 **Tracked GitHub organizations in this channel:**\n${list}`,
         },
       });
     }
