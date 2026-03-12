@@ -126,12 +126,14 @@ export async function POST(req: NextRequest) {
         data: { flags: EPHEMERAL },
       });
 
-      // 2. Process in the background (Edge runtime keeps the request alive until we respond or timeout)
-      (async () => {
+      // 2. Process in the background
+      const backgroundTask = (async () => {
         const followUpUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
         
         try {
+          console.log(`[/track-org] Starting fetch for org: ${orgName}`);
           const repos = await fetchAllOrgRepos(orgName);
+          console.log(`[/track-org] Found ${repos.length} repos.`);
 
           if (repos.length === 0) {
             await fetch(followUpUrl, {
@@ -148,6 +150,7 @@ export async function POST(req: NextRequest) {
             channel_id: targetChannelId,
           }));
 
+          console.log(`[/track-org] Upserting ${rows.length} rows to Supabase...`);
           const { error } = await supabase
             .from('tracked_repos')
             .upsert(rows, { onConflict: 'repo_full_name,channel_id' });
@@ -163,15 +166,22 @@ export async function POST(req: NextRequest) {
           }
 
           const channelMention = channelOption ? `<#${targetChannelId}>` : 'this channel';
-          await fetch(followUpUrl, {
+          console.log(`[/track-org] Sending success follow-up to Discord.`);
+          const followUpRes = await fetch(followUpUrl, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               content: `✅ Now tracking **${repos.length}** repositor${repos.length !== 1 ? 'ies' : 'y'} from **${orgName}** in ${channelMention}.`,
             }),
           });
+          
+          if (!followUpRes.ok) {
+            const errText = await followUpRes.text();
+            console.error(`[/track-org] Discord follow-up failed (${followUpRes.status}):`, errText);
+          }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Unknown error';
+          console.error('[/track-org] Background error:', err);
           await fetch(followUpUrl, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
@@ -179,6 +189,14 @@ export async function POST(req: NextRequest) {
           });
         }
       })();
+
+      // Use waitUntil if available (Next.js Edge runtime / Vercel)
+      if ((req as any).waitUntil) {
+        (req as any).waitUntil(backgroundTask);
+      } else {
+        // Fallback for runtimes without waitUntil (though Edge should have it)
+        console.warn('[/track-org] req.waitUntil is missing. Background task may be terminated.');
+      }
 
       return ackResponse;
     }
