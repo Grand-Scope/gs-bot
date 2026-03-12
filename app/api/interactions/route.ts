@@ -120,49 +120,67 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      let repos: string[];
-      try {
-        repos = await fetchAllOrgRepos(orgName);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        return jsonResponse({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `❌ ${msg}`, flags: EPHEMERAL },
-        });
-      }
-
-      if (repos.length === 0) {
-        return jsonResponse({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: `⚠️ No repositories found in **${orgName}**.`, flags: EPHEMERAL },
-        });
-      }
-
-      const rows = repos.map((repoFullName) => ({
-        org_name: orgName,
-        repo_full_name: repoFullName,
-        channel_id: targetChannelId,
-      }));
-
-      const { error } = await supabase
-        .from('tracked_repos')
-        .upsert(rows, { onConflict: 'repo_full_name,channel_id' });
-
-      if (error) {
-        console.error('[/track-org] Supabase error:', error);
-        return jsonResponse({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { content: '❌ Failed to save tracking info. Please try again later.', flags: EPHEMERAL },
-        });
-      }
-
-      const channelMention = channelOption ? `<#${targetChannelId}>` : 'this channel';
-      return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          content: `✅ Now tracking **${repos.length}** repositor${repos.length !== 1 ? 'ies' : 'y'} from **${orgName}** in ${channelMention}.`,
-        },
+      // 1. Immediately acknowledge the interaction (avoid 3s timeout)
+      const ackResponse = jsonResponse({
+        type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: EPHEMERAL },
       });
+
+      // 2. Process in the background (Edge runtime keeps the request alive until we respond or timeout)
+      (async () => {
+        const followUpUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
+        
+        try {
+          const repos = await fetchAllOrgRepos(orgName);
+
+          if (repos.length === 0) {
+            await fetch(followUpUrl, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: `⚠️ No repositories found in **${orgName}**.` }),
+            });
+            return;
+          }
+
+          const rows = repos.map((repoFullName) => ({
+            org_name: orgName,
+            repo_full_name: repoFullName,
+            channel_id: targetChannelId,
+          }));
+
+          const { error } = await supabase
+            .from('tracked_repos')
+            .upsert(rows, { onConflict: 'repo_full_name,channel_id' });
+
+          if (error) {
+            console.error('[/track-org] Supabase error:', error);
+            await fetch(followUpUrl, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: '❌ Failed to save tracking info. Please try again later.' }),
+            });
+            return;
+          }
+
+          const channelMention = channelOption ? `<#${targetChannelId}>` : 'this channel';
+          await fetch(followUpUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: `✅ Now tracking **${repos.length}** repositor${repos.length !== 1 ? 'ies' : 'y'} from **${orgName}** in ${channelMention}.`,
+            }),
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          await fetch(followUpUrl, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: `❌ ${msg}` }),
+          });
+        }
+      })();
+
+      return ackResponse;
     }
 
     // ── /untrack-org <org> ───────────────────────────────────────────────────
