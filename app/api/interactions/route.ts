@@ -1,15 +1,41 @@
 export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  verifyKey,
-  InteractionType,
-  InteractionResponseType,
-} from 'discord-interactions';
+import { InteractionType, InteractionResponseType } from 'discord-interactions';
 import { supabase } from '@/lib/supabase';
 
 // Ephemeral flag value (Discord API)
 const EPHEMERAL = 64;
+
+function hexToUint8Array(hex: string): ArrayBuffer {
+  const bytes = hex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16));
+  return new Uint8Array(bytes).buffer as ArrayBuffer;
+}
+
+async function verifyDiscordSignature(
+  publicKey: string,
+  signature: string,
+  timestamp: string,
+  body: string
+): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      hexToUint8Array(publicKey),
+      { name: 'Ed25519', namedCurve: 'Ed25519' },
+      false,
+      ['verify']
+    );
+    return await crypto.subtle.verify(
+      'Ed25519',
+      key,
+      hexToUint8Array(signature),
+      new TextEncoder().encode(timestamp + body)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function jsonResponse(data: unknown, status = 200) {
   return new NextResponse(JSON.stringify(data), {
@@ -24,11 +50,11 @@ export async function POST(req: NextRequest) {
   const timestamp = req.headers.get('x-signature-timestamp') ?? '';
   const rawBody = await req.text();
 
-  const isValid = verifyKey(
-    rawBody,
+  const isValid = await verifyDiscordSignature(
+    process.env.DISCORD_PUBLIC_KEY!,
     signature,
     timestamp,
-    process.env.DISCORD_PUBLIC_KEY!
+    rawBody
   );
   if (!isValid) {
     return new NextResponse('Invalid request signature', { status: 401 });
