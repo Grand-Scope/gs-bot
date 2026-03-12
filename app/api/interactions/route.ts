@@ -46,8 +46,10 @@ export async function POST(req: NextRequest) {
 
     // /track-org <org_name>
     if (commandName === 'track-org') {
-      const orgName: string | undefined =
-        interaction.data.options?.[0]?.value;
+      const options: { name: string; value: string }[] = interaction.data.options ?? [];
+      const orgName: string | undefined = options.find((o) => o.name === 'org')?.value;
+      const channelOption = options.find((o) => o.name === 'channel');
+      const targetChannelId: string = channelOption?.value ?? channelId;
 
       if (!orgName) {
         return jsonResponse({
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
 
       const { error } = await supabase
         .from('tracked_orgs')
-        .upsert({ org_name: orgName, channel_id: channelId });
+        .upsert({ org_name: orgName, channel_id: targetChannelId });
 
       if (error) {
         console.error('[/track-org] Supabase error:', error);
@@ -74,10 +76,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      const channelMention = channelOption ? `<#${targetChannelId}>` : 'this channel';
       return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: {
-          content: `✅ Now tracking the **${orgName}** organization in this channel. You'll receive notifications for all its repositories here.`,
+          content: `✅ Now tracking the **${orgName}** organization. Notifications will be sent to ${channelMention}.`,
         },
       });
     }

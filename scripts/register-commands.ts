@@ -4,6 +4,7 @@ import { Routes } from 'discord-api-types/v10';
 // Load env from .env.local when running locally with ts-node
 import { config } from 'dotenv';
 config({ path: '.env.local' });
+config({ path: '.env', override: false });
 
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -29,6 +30,12 @@ const commands = [
         description: 'GitHub organization login name (e.g. vercel)',
         type: 3, // STRING
         required: true,
+      },
+      {
+        name: 'channel',
+        description: 'Channel to send notifications to (defaults to current channel)',
+        type: 7, // CHANNEL
+        required: false,
       },
     ],
   },
