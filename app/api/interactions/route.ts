@@ -1,8 +1,11 @@
 import { InteractionType, InteractionResponseType, verifyKey } from 'discord-interactions';
 import { supabase } from '@/lib/supabase';
+import { waitUntil } from '@vercel/functions';
 
 // Ephemeral flag value (Discord API)
 const EPHEMERAL = 64;
+
+console.log(`[Runtime] Process PID: ${process.pid || 'unknown'}`);
 
 /**
  * Returns a JSON response with the appropriate headers.
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
       // 2. Process in the background
       const backgroundTask = (async () => {
         const followUpUrl = `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}/messages/@original`;
+        console.log(`[/track-org] Background URL: ${followUpUrl}`);
         
         try {
           console.log(`[/track-org] Starting fetch for org: ${orgName}`);
@@ -162,13 +166,8 @@ export async function POST(req: Request) {
         }
       })();
 
-      // Use waitUntil if available (Next.js Edge runtime / Vercel)
-      if ((req as any).waitUntil) {
-        (req as any).waitUntil(backgroundTask);
-      } else {
-        // Fallback for runtimes without waitUntil (though Edge should have it)
-        console.warn('[/track-org] req.waitUntil is missing. Background task may be terminated.');
-      }
+      // Use waitUntil from @vercel/functions to ensure background task survives
+      waitUntil(backgroundTask);
 
       return ackResponse;
     }
