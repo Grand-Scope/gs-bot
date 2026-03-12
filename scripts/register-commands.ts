@@ -22,7 +22,7 @@ const token = BOT_TOKEN.replace(/^Bot\s+/i, '');
 const commands = [
   {
     name: 'track-org',
-    description: 'Track a GitHub organization and receive notifications for all its repositories in this channel',
+    description: 'Auto-discover and track all repos in a GitHub org',
     type: 1, // CHAT_INPUT
     options: [
       {
@@ -40,9 +40,54 @@ const commands = [
     ],
   },
   {
-    name: 'tracked-orgs',
-    description: 'List all GitHub organizations being tracked in this channel',
+    name: 'untrack-org',
+    description: 'Stop tracking all repos from a GitHub org in this channel',
     type: 1,
+    options: [
+      {
+        name: 'org',
+        description: 'GitHub organization login name (e.g. vercel)',
+        type: 3, // STRING
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'list-repos',
+    description: 'List all tracked repositories in this channel, grouped by org',
+    type: 1,
+  },
+  {
+    name: 'add-repo',
+    description: 'Manually track a single GitHub repository in this channel',
+    type: 1,
+    options: [
+      {
+        name: 'repo',
+        description: 'Repository in owner/repo format (e.g. vercel/next.js)',
+        type: 3, // STRING
+        required: true,
+      },
+      {
+        name: 'channel',
+        description: 'Channel to send notifications to (defaults to current channel)',
+        type: 7, // CHANNEL
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'remove-repo',
+    description: 'Stop tracking a single GitHub repository in this channel',
+    type: 1,
+    options: [
+      {
+        name: 'repo',
+        description: 'Repository in owner/repo format (e.g. vercel/next.js)',
+        type: 3, // STRING
+        required: true,
+      },
+    ],
   },
 ];
 
