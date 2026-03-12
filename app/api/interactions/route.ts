@@ -1,44 +1,14 @@
-export const runtime = 'edge';
-
-import { NextRequest, NextResponse } from 'next/server';
-import { InteractionType, InteractionResponseType } from 'discord-interactions';
+import { InteractionType, InteractionResponseType, verifyKey } from 'discord-interactions';
 import { supabase } from '@/lib/supabase';
 
 // Ephemeral flag value (Discord API)
 const EPHEMERAL = 64;
 
-function hexToUint8Array(hex: string): ArrayBuffer {
-  const bytes = hex.match(/.{1,2}/g)!.map((b) => parseInt(b, 16));
-  return new Uint8Array(bytes).buffer as ArrayBuffer;
-}
-
-async function verifyDiscordSignature(
-  publicKey: string,
-  signature: string,
-  timestamp: string,
-  body: string
-): Promise<boolean> {
-  try {
-    const key = await crypto.subtle.importKey(
-      'raw',
-      hexToUint8Array(publicKey),
-      { name: 'Ed25519', namedCurve: 'Ed25519' },
-      false,
-      ['verify']
-    );
-    return await crypto.subtle.verify(
-      'Ed25519',
-      key,
-      hexToUint8Array(signature),
-      new TextEncoder().encode(timestamp + body)
-    );
-  } catch {
-    return false;
-  }
-}
-
+/**
+ * Returns a JSON response with the appropriate headers.
+ */
 function jsonResponse(data: unknown, status = 200) {
-  return new NextResponse(JSON.stringify(data), {
+  return new Response(JSON.stringify(data), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
@@ -78,23 +48,25 @@ async function fetchAllOrgRepos(org: string): Promise<string[]> {
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   // ── Signature verification ─────────────────────────────────────────────────
   const signature = req.headers.get('x-signature-ed25519') ?? '';
   const timestamp = req.headers.get('x-signature-timestamp') ?? '';
-  const rawBody = await req.text();
+  const body = await req.text();
 
-  const isValid = await verifyDiscordSignature(
-    process.env.DISCORD_PUBLIC_KEY!,
+  const isValid = verifyKey(
+    body,
     signature,
     timestamp,
-    rawBody
+    process.env.DISCORD_PUBLIC_KEY!
   );
+
   if (!isValid) {
-    return new NextResponse('Invalid request signature', { status: 401 });
+    console.error('[Interaction] Invalid signature');
+    return new Response('Invalid request signature', { status: 401 });
   }
 
-  const interaction = JSON.parse(rawBody);
+  const interaction = JSON.parse(body);
 
   // ── Ping (type 1) ──────────────────────────────────────────────────────────
   if (interaction.type === InteractionType.PING) {
@@ -367,5 +339,5 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  return new NextResponse('Unsupported interaction type', { status: 400 });
+  return new Response('Unsupported interaction type', { status: 400 });
 }
