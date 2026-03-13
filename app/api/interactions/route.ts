@@ -5,8 +5,6 @@ import { waitUntil } from '@vercel/functions';
 // Ephemeral flag value (Discord API)
 const EPHEMERAL = 64;
 
-console.log(`[Runtime] Process PID: ${process.pid || 'unknown'}`);
-
 /**
  * Returns a JSON response with the appropriate headers.
  */
@@ -36,7 +34,7 @@ async function fetchAllOrgRepos(org: string): Promise<string[]> {
     );
 
     if (!res.ok) {
-      if (res.status === 404) throw new Error(`Organization '${org}' not found on GitHub.`);
+      if (res.status === 404) throw new Error(`Organization '${org}' not found on GitHub. Make sure you are using the organization's login name (slug) from its URL.`);
       throw new Error(`GitHub API error: ${res.status}`);
     }
 
